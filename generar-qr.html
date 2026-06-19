@@ -14,8 +14,8 @@
   input:focus{border-color:#06b6d4}
   button{padding:.7rem 1.5rem;background:#06b6d4;color:#000;border:none;border-radius:.4rem;font-family:inherit;font-size:.85rem;font-weight:700;cursor:pointer;letter-spacing:.05em;text-transform:uppercase}
   button:hover{background:#22d3ee}
-  #qrBox{margin-top:1rem;padding:1.5rem;background:#fff;border-radius:.75rem;display:none}
-  #qrBox canvas{display:block}
+  #qrBox{margin-top:1rem;display:none}
+  #qrBox img{display:block;border-radius:.75rem}
   .download-btn{margin-top:1rem;display:none;padding:.6rem 1.5rem;background:#22c55e;color:#000;border:none;border-radius:.4rem;font-family:inherit;font-size:.8rem;font-weight:700;cursor:pointer;letter-spacing:.05em;text-transform:uppercase}
   .download-btn:hover{background:#4ade80}
   .tip{margin-top:1.5rem;font-size:.7rem;color:#64748b;text-align:center;line-height:1.5;max-width:500px}
@@ -30,7 +30,7 @@
 </div>
 
 <div class="input-wrap">
-  <input type="url" id="urlInput" placeholder="https://tu-sitio.netlify.app">
+  <input type="url" id="urlInput" placeholder="https://paezfrancesco9.github.io/simulacion-quishing/">
   <button onclick="generar()">Generar</button>
 </div>
 
@@ -42,28 +42,46 @@
   Tamano recomendado: minimo 5x5 cm para que se escanee bien.
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 <script>
+// Genera QR usando la API gratuita de Google Charts (no necesita librerías)
 function generar(){
   const url=document.getElementById('urlInput').value.trim();
   if(!url){alert('Ingresa una URL');return}
+
   const box=document.getElementById('qrBox');
   box.innerHTML='';
   box.style.display='block';
-  QRCode.toCanvas(url,{width:300,margin:2,color:{dark:'#000000',light:'#ffffff'}},function(err,canvas){
-    if(err){alert('Error al generar QR');return}
-    box.appendChild(canvas);
+
+  const size=400;
+  const img=document.createElement('img');
+  img.src='https://api.qrserver.com/v1/create-qr-code/?size='+size+'x'+size+'&data='+encodeURIComponent(url)+'&margin=10';
+  img.width=size;
+  img.height=size;
+  img.alt='QR Code';
+  img.onload=function(){
     document.getElementById('downloadBtn').style.display='inline-block';
-  });
+  };
+  img.onerror=function(){
+    box.innerHTML='<p style="color:#ef4444;font-size:.85rem">Error al generar el QR. Verifica tu conexion a internet.</p>';
+  };
+  box.appendChild(img);
 }
+
 function descargar(){
-  const canvas=document.querySelector('#qrBox canvas');
-  if(!canvas)return;
+  const img=document.querySelector('#qrBox img');
+  if(!img)return;
+  // Dibujar en canvas para poder descargar
+  const canvas=document.createElement('canvas');
+  canvas.width=img.naturalWidth;
+  canvas.height=img.naturalHeight;
+  const ctx=canvas.getContext('2d');
+  ctx.drawImage(img,0,0);
   const a=document.createElement('a');
   a.download='qr-simulacion-quishing.png';
   a.href=canvas.toDataURL('image/png');
   a.click();
 }
+
 document.getElementById('urlInput').addEventListener('keydown',function(e){if(e.key==='Enter')generar()});
 </script>
 </body>

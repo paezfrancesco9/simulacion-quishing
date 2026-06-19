@@ -1,0 +1,65 @@
+COMO CONFIGURAR EL REGISTRO DE PERSONAS EN GOOGLE SHEETS
+==========================================================
+
+PASO 1 — Crear la Google Sheet
+-------------------------------
+1. Abri Google Sheets (sheets.google.com)
+2. Crear una hoja nueva
+3. En la fila 1, poner estos encabezados:
+   A1: Fecha
+   B1: IP
+   C1: Dispositivo
+   D1: Sistema Operativo
+   E1: Navegador
+   F1: Pantalla
+   G1: Idioma
+   H1: Bateria
+   I1: Red
+
+PASO 2 — Crear el Apps Script
+-------------------------------
+1. En la Google Sheet, ir a: Extensiones > Apps Script
+2. Borrar todo el codigo que aparece
+3. Pegar este codigo:
+
+--------- COPIAR DESDE ACA ---------
+
+function doPost(e) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var data = JSON.parse(e.postData.contents);
+  sheet.appendRow([
+    data.fecha,
+    data.ip,
+    data.dispositivo,
+    data.so,
+    data.navegador,
+    data.pantalla,
+    data.idioma,
+    data.bateria,
+    data.red
+  ]);
+  return ContentService.createTextOutput('OK');
+}
+
+--------- HASTA ACA ---------
+
+4. Guardar (Ctrl+S)
+5. Click en "Implementar" > "Nueva implementacion"
+6. Tipo: "Aplicacion web"
+7. Ejecutar como: "Yo" (tu cuenta)
+8. Quien tiene acceso: "Cualquier persona"
+9. Click en "Implementar"
+10. Copiar la URL que te da (empieza con https://script.google.com/macros/s/...)
+
+PASO 3 — Pegar la URL en index.html
+-------------------------------------
+1. Abrir index.html
+2. Buscar esta linea:
+   const SHEET_WEBHOOK='';
+3. Pegar la URL entre las comillas:
+   const SHEET_WEBHOOK='https://script.google.com/macros/s/TU-ID-ACA/exec';
+4. Guardar y subir a GitHub
+
+LISTO — Cada persona que escanee el QR va a quedar registrada
+automaticamente en tu Google Sheet con fecha, IP, dispositivo,
+sistema operativo, navegador, pantalla, idioma, bateria y red.

