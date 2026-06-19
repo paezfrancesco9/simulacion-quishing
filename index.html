@@ -143,6 +143,16 @@ body{
 .section-box li .icon{flex-shrink:0;font-size:.82rem}
 .danger-list .icon{color:var(--red)}
 .good-list .icon{color:var(--green)}
+/* Name input */
+.name-box{width:100%;max-width:440px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:.75rem;padding:1.1rem;margin-bottom:1rem;text-align:center}
+.name-label{font-size:.8rem;color:var(--text-dim);margin-bottom:.8rem}
+.name-input-wrap{display:flex;gap:.5rem}
+.name-input-wrap input{flex:1;padding:.6rem .8rem;background:#111;border:1px solid var(--border);border-radius:.4rem;color:var(--text);font-family:inherit;font-size:.85rem;outline:none}
+.name-input-wrap input:focus{border-color:var(--cyan)}
+.name-input-wrap button{padding:.6rem 1.2rem;background:var(--cyan);color:#000;border:none;border-radius:.4rem;font-family:inherit;font-size:.8rem;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.05em}
+.name-input-wrap button:hover{background:#22d3ee}
+.name-ok{font-size:.8rem;color:var(--green);margin-top:.6rem;display:none}
+
 .final-quote{width:100%;max-width:440px;text-align:center;padding:1.5rem 1rem;margin-top:.5rem;border-top:1px solid var(--border)}
 .final-quote .fq-line1{font-size:1rem;color:var(--text);font-weight:600;line-height:1.5;font-style:italic;margin-bottom:.8rem}
 .final-quote .fq-line1 em{color:var(--cyan);font-style:italic}
@@ -260,6 +270,15 @@ body{
       <li><span class="icon">[&gt;]</span> Reportar QR sospechosos al equipo de IT</li>
     </ul>
   </div>
+  <div class="name-box" id="nameBox">
+    <p class="name-label">Ingres&aacute; tu nombre para registrar que completaste la capacitaci&oacute;n:</p>
+    <div class="name-input-wrap">
+      <input type="text" id="nameInput" placeholder="Tu nombre y apellido" autocomplete="off">
+      <button id="nameBtn" onclick="enviarNombre()">Enviar</button>
+    </div>
+    <p class="name-ok" id="nameOk"></p>
+  </div>
+
   <div class="final-quote">
     <div class="fq-line1">&laquo;La tecnolog&iacute;a no fue vulnerada.<br><em>La curiosidad s&iacute;.</em>&raquo;</div>
     <div class="fq-line2">&laquo;La mejor defensa contra los ataques digitales sos vos.&raquo;</div>
@@ -644,6 +663,40 @@ setTimeout(()=>{
     }
   },900);
 },P5_START);
+
+// ══════════════════════════════════════
+// ENVIAR NOMBRE
+// ══════════════════════════════════════
+window.enviarNombre=function(){
+  const name=$('nameInput').value.trim();
+  if(!name){$('nameInput').style.borderColor='var(--red)';return}
+  $('nameBtn').disabled=true;
+  $('nameBtn').textContent='...';
+  if(SHEET_WEBHOOK){
+    const info=getDeviceInfo();
+    const get=l=>(info.find(d=>d.l===l)||{}).v||'--';
+    const data={
+      fecha:new Date().toLocaleString('es-AR'),
+      nombre:name,
+      ip:ipAddress,
+      pais:pais,
+      ciudad:ciudad,
+      dispositivo:get('Dispositivo'),
+      so:get('Sistema operativo'),
+      navegador:get('Navegador'),
+      pantalla:screen.width+'x'+screen.height,
+      idioma:(navigator.language||'').toUpperCase(),
+      bateria:batteryLevel,
+      red:netType
+    };
+    fetch(SHEET_WEBHOOK,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).catch(()=>{});
+  }
+  $('nameInput').style.display='none';
+  $('nameBtn').style.display='none';
+  const ok=$('nameOk');
+  ok.textContent='Registrado: '+name+' — Capacitacion completada.';
+  ok.style.display='block';
+};
 
 })();
 </script>

@@ -7,16 +7,17 @@ PASO 1 — Crear la Google Sheet
 2. Crear una hoja nueva
 3. En la fila 1, poner estos encabezados:
    A1: Fecha
-   B1: IP
-   C1: Pais
-   D1: Ciudad
-   E1: Dispositivo
-   F1: Sistema Operativo
-   G1: Navegador
-   H1: Pantalla
-   I1: Idioma
-   J1: Bateria
-   K1: Red
+   B1: Nombre
+   C1: IP
+   D1: Pais
+   E1: Ciudad
+   F1: Dispositivo
+   G1: Sistema Operativo
+   H1: Navegador
+   I1: Pantalla
+   J1: Idioma
+   K1: Bateria
+   L1: Red
 
 PASO 2 — Crear el Apps Script
 -------------------------------
@@ -31,6 +32,7 @@ function doPost(e) {
   var data = JSON.parse(e.postData.contents);
   sheet.appendRow([
     data.fecha,
+    data.nombre || '',
     data.ip,
     data.pais,
     data.ciudad,
@@ -48,32 +50,13 @@ function doPost(e) {
 --------- HASTA ACA ---------
 
 4. Guardar (Ctrl+S)
-5. Click en "Implementar" > "Nueva implementacion"
-6. Tipo: "Aplicacion web"
-7. Ejecutar como: "Yo" (tu cuenta)
-8. Quien tiene acceso: "Cualquier persona"
-9. Click en "Implementar"
-10. Copiar la URL que te da (empieza con https://script.google.com/macros/s/...)
+5. Click en "Implementar" > "Gestionar implementaciones"
+6. Editar la implementacion existente
+7. Version: "Nueva version"
+8. Click en "Implementar"
 
-PASO 3 — Pegar la URL en index.html
--------------------------------------
-1. Abrir index.html
-2. Buscar esta linea:
-   const SHEET_WEBHOOK='';
-3. Pegar la URL entre las comillas:
-   const SHEET_WEBHOOK='https://script.google.com/macros/s/TU-ID-ACA/exec';
-4. Guardar y subir a GitHub
+IMPORTANTE: como ya tenias una implementacion, solo necesitas
+actualizar el codigo y crear una nueva version. La URL no cambia.
 
-LISTO — Cada persona que escanee el QR va a quedar registrada
-automaticamente en tu Google Sheet con:
-- Fecha y hora
-- Direccion IP
-- Pais
-- Ciudad / Region
-- Dispositivo
-- Sistema operativo
-- Navegador
-- Pantalla
-- Idioma
-- Bateria
-- Tipo de red
+LISTO — Ahora se registra tambien el NOMBRE de la persona.
+La persona ingresa su nombre al final de la simulacion.
