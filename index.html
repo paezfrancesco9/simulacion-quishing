@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Security Analysis</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#000;--bg2:#000;
+  --red:#ef4444;--red-glow:rgba(239,68,68,.5);
+  --yellow:#f59e0b;--yellow-glow:rgba(245,158,11,.4);
+  --green:#22c55e;--green-glow:rgba(34,197,94,.4);
+  --cyan:#06b6d4;--cyan-glow:rgba(6,182,212,.4);
+  --text:#e2e8f0;--text-dim:#64748b;--border:#1e293b;
+}
+body{
+  font-family:'Courier New',Courier,'Lucida Console',monospace;
+  background:#000;color:var(--text);
+  min-height:100dvh;overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+  user-select:none;-webkit-user-select:none;
+  transition:transform .4s ease;
+}
+
+/* Overlays */
+.scanlines{position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.04) 2px,rgba(0,0,0,.04) 4px);pointer-events:none;z-index:9999}
+.flash-overlay{position:fixed;inset:0;pointer-events:none;z-index:9998;opacity:0;transition:opacity .08s}
+.flash-overlay.red{background:rgba(255,0,0,.4);opacity:1}
+.flash-overlay.red-hard{background:rgba(255,0,0,.85);opacity:1;transition:opacity .15s}
+.flash-overlay.white{background:rgba(255,255,255,.95);opacity:1;transition:opacity .1s}
+.vignette{position:fixed;inset:0;pointer-events:none;z-index:2;opacity:0;transition:opacity .6s;background:radial-gradient(ellipse at center,transparent 35%,rgba(239,68,68,.2) 100%)}
+.vignette.on{opacity:1;animation:vig-pulse 2s ease infinite}
+@keyframes vig-pulse{0%,100%{opacity:.8}50%{opacity:1}}
+
+/* Hex rain */
+.hex-bg{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:0}
+.hex-bg span{position:absolute;font-family:'Courier New',monospace;font-size:10px;color:rgba(6,182,212,.05);animation:hex-fall linear infinite;user-select:none}
+.hex-bg.danger span{color:rgba(239,68,68,.07)}
+@keyframes hex-fall{from{transform:translateY(-20px);opacity:0}10%{opacity:1}90%{opacity:1}to{transform:translateY(100vh);opacity:0}}
+
+/* Phase base */
+.phase{display:none;min-height:100dvh;padding:1.5rem 1rem;flex-direction:column;align-items:center;justify-content:center;position:relative;z-index:3}
+.phase.active{display:flex;animation:fadeIn .4s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* PHASE 1 */
+.p1-icon{width:80px;height:80px;border:2px solid var(--yellow);border-radius:50%;display:flex;align-items:center;justify-content:center;animation:p1-pulse 1.5s ease infinite;box-shadow:0 0 30px var(--yellow-glow);margin-bottom:1.5rem}
+.p1-icon svg{width:38px;height:38px}
+@keyframes p1-pulse{0%,100%{box-shadow:0 0 20px var(--yellow-glow)}50%{box-shadow:0 0 50px var(--yellow-glow),0 0 80px var(--yellow-glow)}}
+.p1-title{font-size:1.1rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--yellow);text-shadow:0 0 20px var(--yellow-glow);margin-bottom:1.8rem;text-align:center}
+.task-list{width:100%;max-width:380px;list-style:none;display:flex;flex-direction:column;gap:.65rem;margin-bottom:1.8rem}
+.task-list li{display:flex;align-items:center;gap:.7rem;font-size:.9rem;color:var(--text-dim);padding:.55rem .9rem;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:.5rem;opacity:0;transform:translateX(-12px);transition:all .4s ease}
+.task-list li.show{opacity:1;transform:translateX(0)}
+.task-list li .dot{width:8px;height:8px;border-radius:50%;background:var(--text-dim);flex-shrink:0;transition:background .3s}
+.task-list li.running .dot{background:var(--yellow);animation:blink .5s ease infinite alternate}
+.task-list li.done .dot{background:var(--green)}
+.task-list li.done{color:var(--text)}
+@keyframes blink{from{opacity:.3}to{opacity:1}}
+.prog-wrap{width:100%;max-width:380px;height:5px;border-radius:3px;background:var(--border);overflow:hidden}
+.prog-bar{height:100%;width:0;border-radius:3px;background:linear-gradient(90deg,var(--yellow),var(--red));box-shadow:0 0 10px var(--yellow-glow);transition:width .12s linear}
+.prog-pct{margin-top:.4rem;font-size:.75rem;color:var(--text-dim);font-variant-numeric:tabular-nums}
+
+/* PHASE 2 */
+.p2-icon{width:90px;height:90px;border:2px solid var(--red);border-radius:50%;display:flex;align-items:center;justify-content:center;animation:p2-pulse .8s ease infinite;box-shadow:0 0 40px var(--red-glow);margin-bottom:.8rem}
+.p2-icon svg{width:42px;height:42px}
+@keyframes p2-pulse{0%,100%{transform:scale(1);box-shadow:0 0 30px var(--red-glow)}50%{transform:scale(1.08);box-shadow:0 0 70px var(--red-glow),0 0 100px var(--red-glow)}}
+.p2-title{font-size:1.3rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--red);text-shadow:0 0 25px var(--red-glow);margin-bottom:.2rem;text-align:center}
+.p2-sub{font-size:.8rem;color:var(--text-dim);margin-bottom:1rem;text-align:center}
+.info-grid{width:100%;max-width:400px;display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+.info-card{background:rgba(239,68,68,.05);border:1px solid rgba(239,68,68,.2);border-radius:.55rem;padding:.55rem .7rem;opacity:0;transform:scale(.85);transition:all .35s ease}
+.info-card.show{opacity:1;transform:scale(1)}
+.info-card .lbl{font-size:.55rem;text-transform:uppercase;letter-spacing:.08em;color:var(--red);margin-bottom:.15rem;font-weight:600}
+.info-card .val{font-size:.78rem;color:var(--text);word-break:break-word}
+
+/* PHASE 3 */
+.p3-title{font-size:1.3rem;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:var(--red);text-shadow:0 0 30px var(--red-glow);margin-bottom:1.5rem;text-align:center;animation:p3-throb 1s ease infinite}
+@keyframes p3-throb{0%,100%{opacity:1}50%{opacity:.6}}
+.access-list{width:100%;max-width:380px;list-style:none;display:flex;flex-direction:column;gap:.6rem}
+.access-item{display:flex;align-items:center;gap:.6rem;padding:.55rem .8rem;background:rgba(239,68,68,.06);border-left:3px solid var(--red);border-radius:0 .4rem .4rem 0;font-size:.85rem;color:var(--red);opacity:0;transform:translateX(-25px);transition:all .4s ease}
+.access-item.show{opacity:1;transform:translateX(0)}
+.access-item .ai-icon{font-size:.75rem;flex-shrink:0;color:var(--red);font-weight:700}
+.access-item .ai-status{margin-left:auto;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--green);opacity:0;transition:opacity .3s}
+.access-item.done .ai-status{opacity:1}
+
+/* PHASE 4 */
+#phase4{overflow:hidden}
+.p4-icon{margin-bottom:.8rem;animation:p4-shake .3s ease infinite}
+.p4-icon svg{width:50px;height:50px}
+@keyframes p4-shake{0%,100%{transform:translate(0)}25%{transform:translate(-3px,2px)}50%{transform:translate(3px,-2px)}75%{transform:translate(-2px,-1px)}}
+.p4-title{font-size:1.1rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#ff2222;text-shadow:0 0 30px rgba(255,0,0,.6),0 0 60px rgba(255,0,0,.3);margin-bottom:1rem;text-align:center}
+.encrypt-list{width:100%;max-width:360px;display:flex;flex-direction:column;gap:.8rem;margin-bottom:.8rem}
+.encrypt-item{display:flex;flex-direction:column;gap:.25rem}
+.encrypt-item .ei-row{display:flex;justify-content:space-between;align-items:center}
+.encrypt-item .ei-name{font-size:.8rem;color:var(--text-dim);display:flex;align-items:center;gap:.4rem}
+.encrypt-item .ei-name span{font-size:.9rem}
+.encrypt-item .ei-pct{font-size:.8rem;font-weight:700;color:var(--red);font-variant-numeric:tabular-nums;min-width:3ch;text-align:right}
+.encrypt-item .ei-bar-wrap{height:4px;border-radius:2px;background:rgba(255,255,255,.08);overflow:hidden}
+.encrypt-item .ei-bar{height:100%;width:0;border-radius:2px;background:linear-gradient(90deg,#ff4444,#ff0000);transition:width .1s linear}
+/* File scroll feed */
+.file-feed{width:100%;max-width:360px;height:80px;overflow:hidden;margin-bottom:.8rem;position:relative;border:1px solid rgba(255,0,0,.15);border-radius:.4rem;background:rgba(255,0,0,.03)}
+.file-feed::before,.file-feed::after{content:'';position:absolute;left:0;right:0;height:20px;z-index:1;pointer-events:none}
+.file-feed::before{top:0;background:linear-gradient(#000,transparent)}
+.file-feed::after{bottom:0;background:linear-gradient(transparent,#000)}
+.file-feed-inner{display:flex;flex-direction:column;gap:.15rem;padding:.4rem .6rem;font-family:'Courier New',monospace;font-size:.6rem;color:rgba(255,68,68,.7);animation:file-scroll 4s linear infinite}
+@keyframes file-scroll{from{transform:translateY(0)}to{transform:translateY(-50%)}}
+.file-line .f-status{color:#ff2222;font-weight:700;margin-left:.3rem}
+
+.p4-warnings{width:100%;max-width:360px;display:flex;flex-direction:column;gap:.4rem}
+.p4-warn{padding:.45rem .8rem;background:rgba(255,0,0,.1);border:1px solid rgba(255,0,0,.3);border-radius:.4rem;font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#ff4444;text-align:center;opacity:0;transition:opacity .3s;animation:warn-flash .6s ease infinite}
+.p4-warn.show{opacity:1}
+@keyframes warn-flash{0%,100%{background:rgba(255,0,0,.08)}50%{background:rgba(255,0,0,.2)}}
+
+/* PHASE 5 */
+.p5-label{font-size:.85rem;text-transform:uppercase;letter-spacing:.15em;color:var(--red);margin-bottom:.8rem;animation:blink-text .8s ease infinite}
+@keyframes blink-text{0%,100%{opacity:1}50%{opacity:.3}}
+.p5-num{font-weight:900;color:var(--red);font-variant-numeric:tabular-nums;line-height:.9;transition:font-size .45s cubic-bezier(.22,1,.36,1),color .3s,text-shadow .3s}
+.p5-sub{margin-top:1rem;font-size:.7rem;text-transform:uppercase;letter-spacing:.12em;color:var(--text-dim);animation:blink-text 1.2s ease infinite}
+@keyframes num-pop{0%{transform:scale(1.5);opacity:.4}100%{transform:scale(1);opacity:1}}
+.num-pop{animation:num-pop .35s cubic-bezier(.22,1,.36,1)}
+
+/* PHASE 6 */
+.p6-icon{margin-bottom:1rem;animation:p6-pop .6s cubic-bezier(.34,1.56,.64,1) forwards;transform:scale(0)}
+.p6-icon svg{width:70px;height:70px}
+@keyframes p6-pop{to{transform:scale(1)}}
+.p6-title{font-size:1.8rem;font-weight:700;color:var(--green);text-shadow:0 0 30px var(--green-glow);margin-bottom:.5rem;text-align:center;letter-spacing:.1em}
+.p6-subtitle{font-size:.95rem;font-weight:600;color:var(--cyan);text-transform:uppercase;letter-spacing:.08em;margin-bottom:1.5rem;text-align:center}
+.p6-list{width:100%;max-width:400px;display:flex;flex-direction:column;gap:.5rem}
+.p6-item{display:flex;align-items:center;gap:.6rem;padding:.5rem .8rem;background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.15);border-radius:.5rem;font-size:.85rem;color:var(--text-dim);opacity:0;transform:translateY(8px);transition:all .35s ease}
+.p6-item.show{opacity:1;transform:translateY(0)}
+.p6-item .chk{color:var(--green);font-weight:700;flex-shrink:0}
+
+/* PHASE 7 */
+#phase7{padding:2rem 1.2rem}
+.p7-block{width:100%;max-width:440px;margin-bottom:1.2rem}
+.p7-highlight{font-size:.95rem;color:var(--yellow);line-height:1.6;text-align:center;margin-bottom:1.5rem;padding:0 .5rem}
+.p7-highlight strong{color:var(--red);font-weight:800}
+.p7-narrative{font-size:.85rem;color:var(--text-dim);line-height:1.6;text-align:center;margin-bottom:1.5rem;padding:0 .5rem}
+.section-box{width:100%;max-width:440px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:.75rem;padding:1.1rem;margin-bottom:1rem}
+.section-box h3{font-size:.85rem;font-weight:700;color:var(--cyan);letter-spacing:.06em;margin-bottom:.7rem;display:flex;align-items:center;gap:.5rem}
+.section-box ul{list-style:none;display:flex;flex-direction:column;gap:.45rem}
+.section-box li{font-size:.82rem;color:var(--text-dim);display:flex;align-items:flex-start;gap:.5rem;line-height:1.4}
+.section-box li .icon{flex-shrink:0;font-size:.82rem}
+.danger-list .icon{color:var(--red)}
+.good-list .icon{color:var(--green)}
+.final-quote{width:100%;max-width:440px;text-align:center;padding:1.5rem 1rem;margin-top:.5rem;border-top:1px solid var(--border)}
+.final-quote .fq-line1{font-size:1rem;color:var(--text);font-weight:600;line-height:1.5;font-style:italic;margin-bottom:.8rem}
+.final-quote .fq-line1 em{color:var(--cyan);font-style:italic}
+.final-quote .fq-line2{font-size:1.1rem;color:var(--green);font-weight:700;text-shadow:0 0 15px var(--green-glow)}
+.footer{margin-top:1.5rem;font-size:.6rem;color:var(--text-dim);opacity:.3;text-align:center}
+
+/* Utils */
+@keyframes shake-screen{0%,100%{transform:translate(0)}10%{transform:translate(-4px,2px)}20%{transform:translate(4px,-2px)}30%{transform:translate(-3px,-1px)}40%{transform:translate(3px,1px)}50%{transform:translate(-2px,3px)}60%{transform:translate(2px,-3px)}70%{transform:translate(-1px,2px)}80%{transform:translate(1px,-1px)}90%{transform:translate(-2px,1px)}}
+.screen-shake{animation:shake-screen .5s ease}
+</style>
+</head>
+<body>
+
+<div class="scanlines"></div>
+<div class="hex-bg" id="hexBg"></div>
+<div class="flash-overlay" id="flash"></div>
+<div class="vignette" id="vignette"></div>
+
+<!-- PHASE 1 -->
+<div class="phase active" id="phase1">
+  <div class="p1-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+  <div class="p1-title">An&aacute;lisis de seguridad iniciado</div>
+  <ul class="task-list" id="taskList">
+    <li><span class="dot"></span>Buscando amenazas...</li>
+    <li><span class="dot"></span>Verificando sistema...</li>
+    <li><span class="dot"></span>Analizando conexiones...</li>
+    <li><span class="dot"></span>Identificando dispositivo...</li>
+  </ul>
+  <div class="prog-wrap"><div class="prog-bar" id="progBar"></div></div>
+  <div class="prog-pct" id="progPct">0%</div>
+</div>
+
+<!-- PHASE 2 -->
+<div class="phase" id="phase2">
+  <div class="p2-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+  <div class="p2-title">ALERTA DE SEGURIDAD</div>
+  <div class="p2-sub">Informaci&oacute;n detectada de tu dispositivo</div>
+  <div class="info-grid" id="infoGrid"></div>
+</div>
+
+<!-- PHASE 3 -->
+<div class="phase" id="phase3">
+  <div class="p3-title">[!] ACTIVIDAD SOSPECHOSA DETECTADA</div>
+  <ul class="access-list" id="accessList">
+    <li class="access-item"><span class="ai-icon">[&gt;]</span>Acceso a contactos...<span class="ai-status">COMPLETO</span></li>
+    <li class="access-item"><span class="ai-icon">[&gt;]</span>Acceso a fotograf&iacute;as...<span class="ai-status">COMPLETO</span></li>
+    <li class="access-item"><span class="ai-icon">[&gt;]</span>Acceso a historial de navegaci&oacute;n...<span class="ai-status">COMPLETO</span></li>
+    <li class="access-item"><span class="ai-icon">[&gt;]</span>Acceso a informaci&oacute;n del dispositivo...<span class="ai-status">COMPLETO</span></li>
+    <li class="access-item"><span class="ai-icon">[!]</span>Conexi&oacute;n externa detectada...<span class="ai-status">ACTIVA</span></li>
+    <li class="access-item"><span class="ai-icon">[X]</span>Actividad no autorizada identificada...<span class="ai-status">CR&Iacute;TICO</span></li>
+  </ul>
+</div>
+
+<!-- PHASE 4 -->
+<div class="phase" id="phase4">
+  <div class="p4-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#ff2222" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div>
+  <div class="p4-title">SUS DATOS EST&Aacute;N SIENDO CIFRADOS</div>
+  <div class="encrypt-list" id="encryptList">
+    <div class="encrypt-item"><div class="ei-row"><span class="ei-name">/storage/photos/</span><span class="ei-pct">0%</span></div><div class="ei-bar-wrap"><div class="ei-bar"></div></div></div>
+    <div class="encrypt-item"><div class="ei-row"><span class="ei-name">/data/messages/</span><span class="ei-pct">0%</span></div><div class="ei-bar-wrap"><div class="ei-bar"></div></div></div>
+    <div class="encrypt-item"><div class="ei-row"><span class="ei-name">/data/contacts/</span><span class="ei-pct">0%</span></div><div class="ei-bar-wrap"><div class="ei-bar"></div></div></div>
+    <div class="encrypt-item"><div class="ei-row"><span class="ei-name">/system/apps/</span><span class="ei-pct">0%</span></div><div class="ei-bar-wrap"><div class="ei-bar"></div></div></div>
+  </div>
+  <div class="file-feed" id="fileFeed"><div class="file-feed-inner" id="fileFeedInner"></div></div>
+  <div class="p4-warnings" id="p4Warnings">
+    <div class="p4-warn">[ENCRYPT] Cifrando archivos del sistema</div>
+    <div class="p4-warn">[EXFIL] Extrayendo datos sensibles</div>
+    <div class="p4-warn">[LOCK] Bloqueando acceso al dispositivo</div>
+  </div>
+</div>
+
+<!-- PHASE 5 -->
+<div class="phase" id="phase5">
+  <div class="p5-label">[CRITICAL] DISPOSITIVO COMPROMETIDO</div>
+  <div class="p5-num" id="p5Num">5</div>
+  <div class="p5-sub">// SIN RETORNO</div>
+</div>
+
+<!-- PHASE 6 -->
+<div class="phase" id="phase6">
+  <div class="p6-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+  <div class="p6-title">TRANQUILO</div>
+  <div class="p6-subtitle">Esto fue una simulaci&oacute;n educativa</div>
+  <div class="p6-list" id="p6List">
+    <div class="p6-item"><span class="chk">[OK]</span> Tu tel&eacute;fono NO tiene virus</div>
+    <div class="p6-item"><span class="chk">[OK]</span> Tus datos NO fueron robados</div>
+    <div class="p6-item"><span class="chk">[OK]</span> Tus fotos NO fueron cifradas</div>
+    <div class="p6-item"><span class="chk">[OK]</span> Ning&uacute;n archivo fue modificado</div>
+  </div>
+</div>
+
+<!-- PHASE 7 -->
+<div class="phase" id="phase7">
+  <div class="p7-block">
+    <div class="p7-highlight">Acab&aacute;s de experimentar un ejemplo de <strong>QUISHING</strong>.</div>
+    <div class="p7-narrative">Hace menos de un minuto escaneaste un c&oacute;digo QR sin saber qu&eacute; hab&iacute;a detr&aacute;s.<br><br>Eso es exactamente lo que ocurre todos los d&iacute;as en ataques reales.</div>
+  </div>
+  <div class="section-box">
+    <h3>[?] Si este QR hubiera sido malicioso</h3>
+    <ul class="danger-list">
+      <li><span class="icon">[X]</span> Podr&iacute;as haber entregado credenciales</li>
+      <li><span class="icon">[X]</span> Podr&iacute;as haber descargado malware</li>
+      <li><span class="icon">[X]</span> Podr&iacute;as haber ingresado a una p&aacute;gina falsa</li>
+      <li><span class="icon">[X]</span> Podr&iacute;as haber sido v&iacute;ctima de phishing</li>
+      <li><span class="icon">[X]</span> Podr&iacute;as haber expuesto informaci&oacute;n corporativa</li>
+    </ul>
+  </div>
+  <div class="section-box">
+    <h3>[+] Buenas pr&aacute;cticas</h3>
+    <ul class="good-list">
+      <li><span class="icon">[&gt;]</span> Verificar el origen del QR antes de escanearlo</li>
+      <li><span class="icon">[&gt;]</span> Revisar el enlace antes de abrirlo</li>
+      <li><span class="icon">[&gt;]</span> Desconfiar de mensajes urgentes</li>
+      <li><span class="icon">[&gt;]</span> No escanear c&oacute;digos QR desconocidos</li>
+      <li><span class="icon">[&gt;]</span> Reportar QR sospechosos al equipo de IT</li>
+    </ul>
+  </div>
+  <div class="final-quote">
+    <div class="fq-line1">&laquo;La tecnolog&iacute;a no fue vulnerada.<br><em>La curiosidad s&iacute;.</em>&raquo;</div>
+    <div class="fq-line2">&laquo;La mejor defensa contra los ataques digitales sos vos.&raquo;</div>
+  </div>
+  <div class="footer">Simulaci&oacute;n educativa &mdash; Capacitaci&oacute;n en Ciberseguridad</div>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+// ══════════════════════════════════════
+// AUDIO
+// ══════════════════════════════════════
+let audioCtx;
+function ensureAudio(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)()}
+document.addEventListener('touchstart',ensureAudio,{once:true});
+document.addEventListener('click',ensureAudio,{once:true});
+
+function playTone(freq,dur,type,vol,ramp){
+  try{
+    ensureAudio();const t=audioCtx.currentTime;
+    const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+    o.type=type||'sine';o.frequency.value=freq;
+    if(ramp)o.frequency.exponentialRampToValueAtTime(ramp,t+dur);
+    g.gain.setValueAtTime(vol||.06,t);
+    g.gain.exponentialRampToValueAtTime(.001,t+dur);
+    o.connect(g);g.connect(audioCtx.destination);
+    o.start();o.stop(t+dur);
+  }catch(e){}
+}
+
+function scanPulse(){playTone(90,.35,'sine',.07,60)}
+function alertHit(){playTone(55,.5,'sine',.1,35);playTone(110,.3,'sine',.05,70)}
+function warningHum(){playTone(65,.6,'sine',.09,40)}
+function alarmDrone(){playTone(70,.4,'sine',.12,50);setTimeout(()=>playTone(55,.5,'sine',.1,35),400)}
+function countImpact(n){
+  const f=50+(n*8),v=.08+((5-n)*.025);
+  playTone(f,.7,'sine',v,30);playTone(f*2,.3,'sine',v*.4,f);
+}
+function staticBurst(){
+  try{ensureAudio();const len=audioCtx.sampleRate*.1,buf=audioCtx.createBuffer(1,len,audioCtx.sampleRate),d=buf.getChannelData(0);
+  for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*.06;
+  const s=audioCtx.createBufferSource(),g=audioCtx.createGain();s.buffer=buf;
+  g.gain.setValueAtTime(.04,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.1);
+  s.connect(g);g.connect(audioCtx.destination);s.start()}catch(e){}
+}
+
+// Heartbeat — latido grave
+let hbInterval=null;
+function startHeartbeat(bpm){
+  stopHeartbeat();
+  const ms=60000/bpm;
+  hbInterval=setInterval(()=>{
+    playTone(40,.12,'sine',.13,25);
+    setTimeout(()=>playTone(50,.1,'sine',.09,30),120);
+  },ms);
+}
+function stopHeartbeat(){if(hbInterval){clearInterval(hbInterval);hbInterval=null}}
+
+// ══════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════
+const $=id=>document.getElementById(id);
+const flashEl=$('flash');
+const vignette=$('vignette');
+const hexBg=$('hexBg');
+const vibrate=p=>{try{navigator.vibrate&&navigator.vibrate(p)}catch(e){}};
+
+function flashRed(ms){flashEl.className='flash-overlay red';setTimeout(()=>flashEl.className='flash-overlay',ms||120)}
+function flashRedHard(ms){flashEl.className='flash-overlay red-hard';setTimeout(()=>flashEl.className='flash-overlay',ms||1000)}
+
+function goPhase(from,to){$(from).classList.remove('active');$(to).classList.add('active')}
+function tilt(deg){document.body.style.transform='rotate('+deg+'deg)'}
+function tiltReset(){document.body.style.transform=''}
+
+// Hex rain
+const hexC='0123456789ABCDEF';
+function spawnHex(){
+  const s=document.createElement('span');let t='';for(let i=0;i<8;i++)t+=hexC[Math.random()*16|0];
+  s.textContent=t;s.style.left=Math.random()*100+'vw';s.style.animationDuration=(5+Math.random()*8)+'s';
+  hexBg.appendChild(s);setTimeout(()=>s.remove(),14000);
+}
+const hexInt=setInterval(spawnHex,280);
+for(let i=0;i<12;i++)spawnHex();
+
+// ══════════════════════════════════════
+// DEVICE INFO (extended)
+// ══════════════════════════════════════
+let ipAddress='Obteniendo...';
+let batteryLevel='--';
+let netType='--';
+let cpuCores=navigator.hardwareConcurrency||'--';
+
+// Fetch IP
+fetch('https://api.ipify.org?format=json').then(r=>r.json()).then(d=>{ipAddress=d.ip}).catch(()=>{ipAddress='Oculta (VPN?)'});
+
+// Battery
+if(navigator.getBattery){navigator.getBattery().then(b=>{batteryLevel=Math.round(b.level*100)+'%'}).catch(()=>{})}
+
+// Network
+if(navigator.connection){
+  const c=navigator.connection;
+  netType=c.effectiveType?(c.effectiveType.toUpperCase()):'Desconocido';
+  if(c.type&&c.type!=='unknown')netType=c.type.charAt(0).toUpperCase()+c.type.slice(1)+' ('+netType+')';
+}
+
+function getDeviceInfo(){
+  const ua=navigator.userAgent;
+  let dev='Desconocido',os='Desconocido',br='Desconocido';
+  if(/iPhone/.test(ua))dev='iPhone';
+  else if(/iPad/.test(ua))dev='iPad';
+  else if(/Android/.test(ua)){dev='Android';const m=ua.match(/;\s*([^;)]+)\s*Build/);if(m)dev=m[1].trim()}
+  else if(/Windows/.test(ua))dev='PC Windows';
+  else if(/Mac/.test(ua))dev='Mac';
+  else if(/Linux/.test(ua))dev='Linux';
+  if(/Windows NT 10/.test(ua))os='Windows 10/11';
+  else if(/Windows NT/.test(ua))os='Windows';
+  else if(/iPhone OS ([\d_]+)/.test(ua))os='iOS '+ua.match(/iPhone OS ([\d_]+)/)[1].replace(/_/g,'.');
+  else if(/Android ([\d.]+)/.test(ua))os='Android '+ua.match(/Android ([\d.]+)/)[1];
+  else if(/Mac OS X ([\d_.]+)/.test(ua))os='macOS '+ua.match(/Mac OS X ([\d_.]+)/)[1].replace(/_/g,'.');
+  else if(/Linux/.test(ua))os='Linux';
+  if(/Edg\//.test(ua))br='Microsoft Edge';
+  else if(/OPR\/|Opera/.test(ua))br='Opera';
+  else if(/SamsungBrowser/.test(ua))br='Samsung Internet';
+  else if(/Chrome\//.test(ua))br='Google Chrome';
+  else if(/Safari\//.test(ua)&&!/Chrome/.test(ua))br='Safari';
+  else if(/Firefox\//.test(ua))br='Firefox';
+  return [
+    {l:'Dirección IP',v:ipAddress},
+    {l:'Dispositivo',v:dev},
+    {l:'Sistema operativo',v:os},
+    {l:'Navegador',v:br},
+    {l:'Batería',v:batteryLevel},
+    {l:'Red',v:netType},
+    {l:'Núcleos CPU',v:cpuCores+''},
+    {l:'Idioma',v:(navigator.language||'??').toUpperCase()},
+    {l:'Pantalla',v:screen.width+'×'+screen.height+' px'},
+    {l:'Hora local',v:new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}
+  ];
+}
+
+// ══════════════════════════════════════
+// FILE NAMES for ransomware scroll
+// ══════════════════════════════════════
+const fakeFiles=[
+  'IMG_20250114_091523.jpg','IMG_20250306_183201.jpg','IMG_20250422_120045.jpg',
+  'WhatsApp_Backup_2025.db','Contactos_Export.vcf','Screenshot_2025-05-12.png',
+  'Video_Vacaciones_2024.mp4','Documento_Trabajo.pdf','Notas_Reunión.docx',
+  'WhatsApp_Image_2025-03-18.jpg','Foto_Perfil.png','CV_2025_Actualizado.pdf',
+  'Backup_Fotos_iCloud.zip','Audio_Memo_0032.m4a','Contraseñas.txt',
+  'Recibo_Sueldo_Mayo.pdf','Factura_Tarjeta.pdf','Chat_Export_Grupo.txt',
+  'DCIM_Camera_0847.jpg','Selfie_Cumple.jpg','Video_Hijos_Parque.mp4',
+  'Planilla_Gastos.xlsx','Clave_WiFi.txt','Certificado_Digital.p12',
+  'Token_Banco.dat','App_Data_Instagram.db','Historial_Chrome.json',
+  'Cookies_Sesion.dat','GPS_Ubicaciones.log','Registro_Llamadas.csv'
+];
+function buildFileFeed(){
+  const inner=$('fileFeedInner');
+  const all=[...fakeFiles,...fakeFiles];
+  all.forEach(f=>{
+    const line=document.createElement('div');
+    line.className='file-line';
+    line.innerHTML=f+' <span class="f-status">CIFRADO</span>';
+    inner.appendChild(line);
+  });
+}
+
+// ══════════════════════════════════════
+// PHASE 1 — SCAN (3s)
+// ══════════════════════════════════════
+const tasks=document.querySelectorAll('#taskList li');
+const progBar=$('progBar'),progPct=$('progPct');
+let prog=0;
+const progInt=setInterval(()=>{
+  prog+=1.2;if(prog>100)prog=100;
+  progBar.style.width=prog+'%';
+  progPct.textContent=Math.floor(prog)+'%';
+},30);
+
+tasks.forEach((li,i)=>{
+  setTimeout(()=>{li.classList.add('show');scanPulse()},150+i*500);
+  setTimeout(()=>li.classList.add('running'),200+i*500);
+  setTimeout(()=>{li.classList.remove('running');li.classList.add('done')},500+i*500);
+});
+
+// ══════════════════════════════════════
+// PHASE 2 — DEVICE INFO (3.5s)
+// ══════════════════════════════════════
+setTimeout(()=>{
+  clearInterval(progInt);
+  progBar.style.width='100%';progPct.textContent='100%';
+  vibrate([150,80,150]);
+  setTimeout(()=>{
+    goPhase('phase1','phase2');
+    hexBg.classList.add('danger');
+    vignette.classList.add('on');
+    flashRed();alertHit();
+    vibrate([200,100,200,100,300]);
+
+    const grid=$('infoGrid');
+    getDeviceInfo().forEach((d,i)=>{
+      const c=document.createElement('div');
+      c.className='info-card';
+      c.innerHTML='<div class="lbl">'+d.l+'</div><div class="val">'+d.v+'</div>';
+      grid.appendChild(c);
+      setTimeout(()=>{c.classList.add('show');scanPulse()},200+i*250);
+    });
+  },350);
+},3000);
+
+// ══════════════════════════════════════
+// PHASE 3 — ESCALATION (5s)
+// ══════════════════════════════════════
+const P3_START=7000;
+setTimeout(()=>{
+  goPhase('phase2','phase3');
+  flashRed(200);warningHum();
+  vibrate([100,50,100,50,200]);
+  startHeartbeat(60);
+  tilt(-.5);
+
+  const items=document.querySelectorAll('.access-item');
+  items.forEach((el,i)=>{
+    setTimeout(()=>{
+      el.classList.add('show');flashRed();alertHit();vibrate(80);
+      document.body.classList.add('screen-shake');
+      setTimeout(()=>document.body.classList.remove('screen-shake'),500);
+    },600+i*700);
+    setTimeout(()=>el.classList.add('done'),900+i*700);
+  });
+
+  setTimeout(()=>tilt(.5),2500);
+  setTimeout(()=>tilt(-.3),4000);
+},P3_START);
+
+// ══════════════════════════════════════
+// PHASE 4 — RANSOMWARE (6s)
+// ══════════════════════════════════════
+const P4_START=P3_START+5800;
+setTimeout(()=>{
+  goPhase('phase3','phase4');
+  flashRedHard(300);alarmDrone();
+  vibrate([300,100,300,100,500]);
+  document.body.classList.add('screen-shake');
+  setTimeout(()=>document.body.classList.remove('screen-shake'),800);
+  startHeartbeat(100);
+  tilt(.7);
+  buildFileFeed();
+
+  const items=document.querySelectorAll('.encrypt-item');
+  items.forEach((item,i)=>{
+    const bar=item.querySelector('.ei-bar');
+    const pct=item.querySelector('.ei-pct');
+    let v=0;
+    setTimeout(()=>{
+      const intv=setInterval(()=>{
+        v+=Math.random()*8+4;if(v>100)v=100;
+        bar.style.width=v+'%';pct.textContent=Math.floor(v)+'%';
+        if(v>=100){clearInterval(intv);pct.style.color='#ff2222';staticBurst();vibrate(50)}
+      },60);
+    },i*700);
+  });
+
+  const warns=document.querySelectorAll('.p4-warn');
+  warns.forEach((w,i)=>setTimeout(()=>{w.classList.add('show');warningHum();flashRed()},600+i*1100));
+
+  setTimeout(()=>tilt(-.5),2000);
+  setTimeout(()=>tilt(.4),4000);
+},P4_START);
+
+// ══════════════════════════════════════
+// PHASE 5 — COUNTDOWN (5s)
+// ══════════════════════════════════════
+const P5_START=P4_START+6000;
+setTimeout(()=>{
+  goPhase('phase4','phase5');
+  tiltReset();
+  vibrate([200,80,200]);
+  startHeartbeat(140);
+
+  const num=$('p5Num');
+  const sizes=['4rem','6rem','9rem','14rem','22rem'];
+  let count=5;
+  num.textContent=count;
+  num.style.fontSize=sizes[0];
+  num.style.textShadow='0 0 40px var(--red-glow),0 0 80px var(--red-glow)';
+  countImpact(count);
+
+  const cInt=setInterval(()=>{
+    count--;
+    if(count<0){clearInterval(cInt);return}
+    num.textContent=count;
+    num.style.fontSize=sizes[5-count-1]||'22rem';
+
+    if(count<=2){
+      num.style.color='#ff0000';
+      num.style.textShadow='0 0 80px rgba(255,0,0,.9),0 0 150px rgba(255,0,0,.5),0 0 250px rgba(255,0,0,.3)';
+    }
+    num.classList.remove('num-pop');void num.offsetWidth;num.classList.add('num-pop');
+    flashRed(180);countImpact(count);
+    vibrate(80+(5-count)*40);
+
+    if(count===0){
+      setTimeout(()=>{
+        // APAGAR TODO — negro total, silencio
+        stopHeartbeat();
+        $('phase5').classList.remove('active');
+        vignette.classList.remove('on');
+        hexBg.style.display='none';
+        flashEl.className='flash-overlay';
+        document.querySelector('.scanlines').style.display='none';
+        tiltReset();
+
+        // 2.5s de oscuridad y silencio absoluto
+        setTimeout(()=>{
+          // Flash suave
+          flashEl.style.background='rgba(255,255,255,.5)';
+          flashEl.style.opacity='1';
+          flashEl.style.transition='opacity .4s';
+          vibrate(150);
+
+          setTimeout(()=>{
+            flashEl.style.opacity='0';
+            setTimeout(()=>{
+              flashEl.style.background='';flashEl.style.transition='';flashEl.className='flash-overlay';
+              document.querySelector('.scanlines').style.display='';
+              $('phase6').classList.add('active');
+
+              const items=document.querySelectorAll('.p6-item');
+              items.forEach((el,i)=>setTimeout(()=>el.classList.add('show'),500+i*500));
+
+              setTimeout(()=>{
+                goPhase('phase6','phase7');
+                clearInterval(hexInt);
+              },500+items.length*500+2500);
+            },400);
+          },400);
+        },2500);
+      },300);
+    }
+  },900);
+},P5_START);
+
+})();
+</script>
+</body>
+</html>

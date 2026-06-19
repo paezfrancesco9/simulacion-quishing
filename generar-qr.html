@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generar QR - Simulacion</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Courier New',monospace;background:#000;color:#e2e8f0;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem}
+  h1{font-size:1.2rem;color:#06b6d4;letter-spacing:.1em;margin-bottom:1.5rem;text-transform:uppercase;text-align:center}
+  .instructions{font-size:.8rem;color:#64748b;text-align:center;margin-bottom:1.5rem;line-height:1.6;max-width:500px}
+  .input-wrap{display:flex;gap:.5rem;width:100%;max-width:500px;margin-bottom:1.5rem}
+  input{flex:1;padding:.7rem 1rem;background:#111;border:1px solid #1e293b;border-radius:.4rem;color:#e2e8f0;font-family:inherit;font-size:.85rem;outline:none}
+  input:focus{border-color:#06b6d4}
+  button{padding:.7rem 1.5rem;background:#06b6d4;color:#000;border:none;border-radius:.4rem;font-family:inherit;font-size:.85rem;font-weight:700;cursor:pointer;letter-spacing:.05em;text-transform:uppercase}
+  button:hover{background:#22d3ee}
+  #qrBox{margin-top:1rem;padding:1.5rem;background:#fff;border-radius:.75rem;display:none}
+  #qrBox canvas{display:block}
+  .download-btn{margin-top:1rem;display:none;padding:.6rem 1.5rem;background:#22c55e;color:#000;border:none;border-radius:.4rem;font-family:inherit;font-size:.8rem;font-weight:700;cursor:pointer;letter-spacing:.05em;text-transform:uppercase}
+  .download-btn:hover{background:#4ade80}
+  .tip{margin-top:1.5rem;font-size:.7rem;color:#64748b;text-align:center;line-height:1.5;max-width:500px}
+</style>
+</head>
+<body>
+
+<h1>Generador de QR</h1>
+<div class="instructions">
+  1. Subi tu archivo index.html a un hosting gratuito (Netlify, GitHub Pages, etc.)<br>
+  2. Pega la URL publica abajo y genera el QR para tu capacitacion.
+</div>
+
+<div class="input-wrap">
+  <input type="url" id="urlInput" placeholder="https://tu-sitio.netlify.app">
+  <button onclick="generar()">Generar</button>
+</div>
+
+<div id="qrBox"></div>
+<button class="download-btn" id="downloadBtn" onclick="descargar()">Descargar QR (.png)</button>
+
+<div class="tip">
+  Consejo: imprimilo grande para la presentacion.<br>
+  Tamano recomendado: minimo 5x5 cm para que se escanee bien.
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+<script>
+function generar(){
+  const url=document.getElementById('urlInput').value.trim();
+  if(!url){alert('Ingresa una URL');return}
+  const box=document.getElementById('qrBox');
+  box.innerHTML='';
+  box.style.display='block';
+  QRCode.toCanvas(url,{width:300,margin:2,color:{dark:'#000000',light:'#ffffff'}},function(err,canvas){
+    if(err){alert('Error al generar QR');return}
+    box.appendChild(canvas);
+    document.getElementById('downloadBtn').style.display='inline-block';
+  });
+}
+function descargar(){
+  const canvas=document.querySelector('#qrBox canvas');
+  if(!canvas)return;
+  const a=document.createElement('a');
+  a.download='qr-simulacion-quishing.png';
+  a.href=canvas.toDataURL('image/png');
+  a.click();
+}
+document.getElementById('urlInput').addEventListener('keydown',function(e){if(e.key==='Enter')generar()});
+</script>
+</body>
+</html>
